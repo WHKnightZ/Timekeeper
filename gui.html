@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.2.0/socket.io.js"
+		integrity="sha256-yr4fRk/GU1ehYJPAs8P4JlTgu0Hdsp4ZKrx8bDEDC3I=" crossorigin="anonymous"></script>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+	<title>Timekeeper</title>
+</head>
+
+<body style="text-align: center;">
+	<script type="text/javascript">
+		var socket = null;
+
+		$(document).ready(function () {
+			socket = io.connect('http://127.0.0.1:5012'); // connection_string/namespace
+			var enc = new TextDecoder("utf-8");
+			var image = document.getElementById("img");
+
+			image.src = "images/default.png";
+
+			socket.on('connect', function () { // on event connect
+				console.log('connected to server');
+			});
+
+			socket.on('disconnect', function () { // on event disconnect
+				console.log('disconnected from server');
+			});
+
+			socket.on('image', function (arrayBuffer) { // on event image
+				let bytes = new Uint8Array(arrayBuffer);
+				let src = 'data:image/jpg;base64,' + enc.decode(bytes);
+				image.src = src;
+			});
+
+			socket.on('status', function (status) {
+				var node = document.createElement("div");
+				node.innerHTML = '<div style="color: green; margin: 10px 0 10px 20px">' + status + '</div>';
+				document.getElementById('status').appendChild(node);
+			});
+		});
+	</script>
+	<div style="display: flex; flex-direction: row; justify-content: center; margin: 40px;">
+		<img id="img" alt="img" width="640" height="480" />
+		<div id="status"
+			style="width: 300px; height: 480px; border: 1px solid #999; overflow-y: scroll; text-align: left; margin-left: 40px;">
+		</div>
+	</div>
+</body>
+
+</html>

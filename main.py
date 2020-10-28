@@ -1,3 +1,4 @@
+import base64
 from os import listdir
 from os.path import join, isfile
 import cv2
@@ -9,6 +10,10 @@ import json
 from scipy.spatial import distance
 from utils.logging import logger
 
+from flask import Flask
+import socketio
+import logging
+
 
 class Timekeeper:
     def __init__(self):
@@ -17,15 +22,24 @@ class Timekeeper:
         self.image = None
         self.old_faces = []
         self.faces = []
-        self.cascade = cv2.CascadeClassifier("haarcascade_frontalface.xml")
-        self.cam = cv2.VideoCapture(0)
+        self.cascade = cv2.CascadeClassifier("models/haarcascade_frontalface.xml")
+        self.cam = cv2.VideoCapture("test2.mp4")
         self.color_box = [0, 192, 0]
         self.font = cv2.FONT_HERSHEY_PLAIN
         self.model = None
+        self.sio = socketio.Server(async_mode="threading", cors_allowed_origins="*")
+        self.app = Flask(__name__)
+        self.app.wsgi_app = socketio.WSGIApp(self.sio, self.app.wsgi_app)
+        log = logging.getLogger("werkzeug")
+        log.setLevel(logging.ERROR)
+        log.disabled = True
 
         # data.json save feature vectors of all employees
-        with open("data.json") as json_file:
-            self.data = json.load(json_file)["data"]
+        try:
+            with open("models/data.json") as json_file:
+                self.data = json.load(json_file)["data"]
+        except:
+            pass
 
     @staticmethod
     def prewhiten(x):
@@ -68,15 +82,21 @@ class Timekeeper:
         boxes = self.cascade.detectMultiScale(image, 1.1, 4)
         logger.info("Done cascade: " + str(boxes))
         if len(boxes) == 0:
-            return
+            return None, None
 
         aligned_images = []
         for box in boxes:
             x, y, w, h = box
             cropped = image[y - margin_half:y + h + margin_half, x - margin_half:x + w + margin_half, :]
             # input of facenet is 160 x 160
-            aligned = cv2.resize(cropped, (160, 160))
-            aligned_images.append(aligned)
+            try:
+                aligned = cv2.resize(cropped, (160, 160))
+                aligned_images.append(aligned)
+            except:
+                logger.info("Crop error")
+
+        if len(aligned_images) == 0:
+            return None, None
 
         aligned_images = np.array(aligned_images)
         prewhiten_images = self.prewhiten(aligned_images)
@@ -88,6 +108,8 @@ class Timekeeper:
 
     def recognize_faces(self):
         boxes, predicts = self.detect_faces(self.image)
+        if boxes is None:
+            return
         self.faces = []
         for box, predict in zip(boxes, predicts):
             face_vector = np.array(self.l2_normalize(predict)).tolist()
@@ -115,7 +137,7 @@ class Timekeeper:
             cv2.putText(self.image, face["label"], (x + 10, y + 25), self.font, 1.2, (255, 255, 255), 1, cv2.LINE_AA)
 
     def predict(self):
-        self.model = load_model("facenet_keras.h5")
+        self.model = load_model("models/facenet_keras.h5")
         image = cv2.imread("images/test/test0.jpg")
         image = cv2.resize(image, (160, 160))
         images = np.array([image])
@@ -127,7 +149,7 @@ class Timekeeper:
                 self.recognize_faces()
 
     def train(self):
-        self.model = load_model("facenet_keras.h5")
+        self.model = load_model("models/facenet_keras.h5")
 
         # select all folders in Train, each folder name is a label
         # each folder contains list of training image
@@ -154,7 +176,7 @@ class Timekeeper:
 
         data = {'data': data}
 
-        with open('data.json', 'w') as file:
+        with open('models/data.json', 'w') as file:
             json.dump(data, file)
 
     def check(self):
@@ -165,13 +187,11 @@ class Timekeeper:
                 if label == "unknown":
                     continue
                 if label not in self.old_faces:
-                    print(label + " is detected")
+                    self.sio.emit("status", label + " is detected")
                 old_faces.append(label)
         self.old_faces = old_faces
 
-    def run(self):
-        Thread(target=self.predict, daemon=True).start()
-
+    def get_image(self):
         while True:
             if self.begin:
                 break
@@ -184,7 +204,9 @@ class Timekeeper:
                 break
 
             self.paint()
-            cv2.imshow("Camera", self.image)
+            # cv2.imshow("Camera", self.image)
+            data = cv2.imencode(".jpg", self.image)[1].tobytes()
+            self.sio.emit("image", base64.b64encode(data))
 
             k = cv2.waitKey(1)
             if k % 256 == 27:
@@ -192,9 +214,13 @@ class Timekeeper:
                 print("Escape hit, closing...")
                 break
             time.sleep(0.04)
-
         self.cam.release()
-        cv2.destroyAllWindows()
+
+    def run(self):
+        Thread(target=self.predict, daemon=True).start()
+        Thread(target=self.get_image, daemon=True).start()
+
+        self.app.run(host="0.0.0.0", port=5012, threaded=True)
 
 
 if __name__ == "__main__":
