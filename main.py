@@ -23,7 +23,7 @@ class Timekeeper:
         self.old_faces = []
         self.faces = []
         self.cascade = cv2.CascadeClassifier("models/haarcascade_frontalface.xml")
-        self.cam = cv2.VideoCapture("test2.mp4")
+        self.cam = cv2.VideoCapture("test.mp4")
         self.color_box = [0, 192, 0]
         self.font = cv2.FONT_HERSHEY_PLAIN
         self.model = None
@@ -138,10 +138,9 @@ class Timekeeper:
 
     def predict(self):
         self.model = load_model("models/facenet_keras.h5")
-        image = cv2.imread("images/test/test0.jpg")
-        image = cv2.resize(image, (160, 160))
-        images = np.array([image])
-        self.model.predict_on_batch(images)
+        self.image = cv2.imread("images/test/test1.jpg")
+        self.recognize_faces()
+        self.image = None
         time.sleep(1)
         self.begin = True
         while True:
@@ -180,6 +179,9 @@ class Timekeeper:
             json.dump(data, file)
 
     def check(self):
+        if not self.begin:
+            return
+
         old_faces = []
         if len(self.faces) > 0:
             for face in self.faces:
