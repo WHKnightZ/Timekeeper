@@ -9,7 +9,6 @@ from tensorflow.keras.models import load_model
 import json
 from scipy.spatial import distance
 from utils.logging import logger
-
 from flask import Flask
 import socketio
 import logging
@@ -18,12 +17,16 @@ import logging
 class Timekeeper:
     def __init__(self):
         self.begin = False
-
         self.image = None
         self.old_faces = []
         self.faces = []
         self.cascade = cv2.CascadeClassifier("models/haarcascade_frontalface.xml")
-        self.cam = cv2.VideoCapture("test.mp4")
+
+        # open webcam
+        # self.cam = cv2.VideoCapture(0)
+
+        # open mp4
+        self.cam = cv2.VideoCapture("test2.mp4")
         self.color_box = [0, 192, 0]
         self.font = cv2.FONT_HERSHEY_PLAIN
         self.model = None
@@ -101,16 +104,16 @@ class Timekeeper:
         aligned_images = np.array(aligned_images)
         prewhiten_images = self.prewhiten(aligned_images)
 
-        predicts = self.model.predict_on_batch(prewhiten_images)
+        predicts = self.model.predict(prewhiten_images)
 
         vectors = [np.array(self.l2_normalize(predict)).tolist() for predict in predicts]
         return boxes, vectors
 
     def recognize_faces(self):
         boxes, predicts = self.detect_faces(self.image)
+        self.faces = []
         if boxes is None:
             return
-        self.faces = []
         for box, predict in zip(boxes, predicts):
             face_vector = np.array(self.l2_normalize(predict)).tolist()
             min_value = 9
@@ -134,14 +137,15 @@ class Timekeeper:
         for face in self.faces:
             x, y, w, h = face["box"]
             cv2.rectangle(self.image, (x, y), (x + w, y + h), self.color_box, 2)
-            cv2.putText(self.image, face["label"], (x + 10, y + 25), self.font, 1.2, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(self.image, face["label"], (x + 10, y + 25), self.font, 1.0, (255, 255, 255), 1, cv2.LINE_AA)
 
     def predict(self):
         self.model = load_model("models/facenet_keras.h5")
-        self.image = cv2.imread("images/test/test1.jpg")
+        self.image = cv2.imread("images/test/test6.jpg")
         self.recognize_faces()
         self.image = None
-        time.sleep(1)
+        self.faces = []
+        # time.sleep(1)
         self.begin = True
         while True:
             if self.image is not None:
@@ -206,7 +210,6 @@ class Timekeeper:
                 break
 
             self.paint()
-            # cv2.imshow("Camera", self.image)
             data = cv2.imencode(".jpg", self.image)[1].tobytes()
             self.sio.emit("image", base64.b64encode(data))
 

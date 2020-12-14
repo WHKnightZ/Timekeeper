@@ -44,7 +44,3 @@ conda install keras
 pip install flask
 pip install python-socketio
 
-conda create -n fr python=3.6 jupyter tensorflow-gpu keras
-conda activate fr
-pip install mtcnn
-
