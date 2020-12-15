@@ -23,10 +23,10 @@ class Timekeeper:
         self.cascade = cv2.CascadeClassifier("models/haarcascade_frontalface.xml")
 
         # open webcam
-        # self.cam = cv2.VideoCapture(0)
+        self.cam = cv2.VideoCapture(0)
 
         # open mp4
-        self.cam = cv2.VideoCapture("test2.mp4")
+        # self.cam = cv2.VideoCapture("test.mp4")
         self.color_box = [0, 192, 0]
         self.font = cv2.FONT_HERSHEY_PLAIN
         self.model = None
